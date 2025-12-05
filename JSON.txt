@@ -1,0 +1,332 @@
+node-red code
+
+[
+    {
+        "id": "609dde192499a49e",
+        "type": "tab",
+        "label": "Thermal Network Pro",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "d69e9671da25ac37",
+        "type": "mqtt in",
+        "z": "609dde192499a49e",
+        "name": "Node Telemetry",
+        "topic": "iot/nodes/+",
+        "qos": "0",
+        "datatype": "auto",
+        "broker": "broker_hmq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 140,
+        "y": 120,
+        "wires": [
+            [
+                "e9bc6f899f4815a6"
+            ]
+        ]
+    },
+    {
+        "id": "e9bc6f899f4815a6",
+        "type": "json",
+        "z": "609dde192499a49e",
+        "name": "Decode JSON",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 320,
+        "y": 120,
+        "wires": [
+            [
+                "50f642db91ce841a"
+            ]
+        ]
+    },
+    {
+        "id": "50f642db91ce841a",
+        "type": "function",
+        "z": "609dde192499a49e",
+        "name": "Update Node State",
+        "func": "// topic: iot/nodes/<id>\nlet nodeId = (msg.topic || \"\").split(\"/\")[2] || \"unknown\";\nlet t = Number(msg.payload.t);\nlet h = Number(msg.payload.h);\nlet a = Number(msg.payload.a);\nlet ts = msg.payload.ts || Date.now();\n\nif (isNaN(t) || isNaN(h)) {\n    // ignore bad packets\n    return null;\n}\n\nlet nodes = flow.get('nodes') || {};\n\nnodes[nodeId] = {\n    id: nodeId,\n    t: t,\n    h: h,\n    a: a,\n    ts: ts,\n    lastSeen: new Date().toLocaleTimeString()\n};\n\nflow.set('nodes', nodes);\n\nconst alertMap = {\n    0: \"Normal\",\n    1: \"High Temperature\",\n    2: \"Low Temperature\",\n    3: \"Sensor Error\"\n};\n\nmsg.nodeId    = nodeId;\nmsg.t         = t;\nmsg.h         = h;\nmsg.alert     = a;\nmsg.alertText = alertMap[a] || \"Unknown\";\nmsg.lastSeen  = nodes[nodeId].lastSeen;\n\n// overview metrics\nlet ids = Object.keys(nodes);\nlet onlineCount = ids.length;\nlet temps = ids.map(id => nodes[id].t);\nlet maxTemp = temps.length ? Math.max.apply(null, temps) : 0;\nlet minTemp = temps.length ? Math.min.apply(null, temps) : 0;\nlet avgTemp = temps.length ? (temps.reduce((a,b)=>a+b,0)/temps.length) : 0;\n\nlet overviewMsg = {\n    payload: {\n        onlineCount,\n        maxTemp,\n        minTemp,\n        avgTemp: Number(avgTemp.toFixed(2))\n    }\n};\n\n// chart messages\nlet tempMsg = { payload: t, topic: nodeId };\nlet humMsg  = { payload: h, topic: nodeId };\n\n// multi-node grid payload\nlet gridMsg = { payload: Object.values(nodes) };\n\nreturn [msg, tempMsg, humMsg, gridMsg, overviewMsg];",
+        "outputs": 4,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 550,
+        "y": 120,
+        "wires": [
+            [
+                "dc1e3642ae39493e",
+                "13e4680578cff959",
+                "81a91e85936c056f",
+                "0af53194c0bfabee"
+            ],
+            [
+                "903d32930486bb82"
+            ],
+            [
+                "f43bec9cbe751783"
+            ],
+            [
+                "db3205a27fdd60bc"
+            ]
+        ]
+    },
+    {
+        "id": "939989096cc60d37",
+        "type": "ui_template",
+        "z": "609dde192499a49e",
+        "group": "grp_overview",
+        "name": "Overview",
+        "order": 1,
+        "width": 12,
+        "height": 2,
+        "format": "<div style=\"display:flex; gap:16px; flex-wrap:wrap;\">\n  <div style=\"flex:1; min-width:160px; background:#000000; color:#ffffff; padding:12px 16px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.6);\">\n    <div style=\"font-size:14px; opacity:0.8;\">Nodes Online</div>\n    <div style=\"font-size:26px; font-weight:bold;\">{{msg.payload.onlineCount}}</div>\n  </div>\n  <div style=\"flex:1; min-width:160px; background:#000000; color:#ffffff; padding:12px 16px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.6);\">\n    <div style=\"font-size:14px; opacity:0.8;\">Average Temp (°C)</div>\n    <div style=\"font-size:26px; font-weight:bold;\">{{msg.payload.avgTemp}}</div>\n  </div>\n  <div style=\"flex:1; min-width:160px; background:#000000; color:#ffffff; padding:12px 16px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.6);\">\n    <div style=\"font-size:14px; opacity:0.8;\">Max Temp (°C)</div>\n    <div style=\"font-size:26px; font-weight:bold;\">{{msg.payload.maxTemp}}</div>\n  </div>\n  <div style=\"flex:1; min-width:160px; background:#000000; color:#ffffff; padding:12px 16px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.6);\">\n    <div style=\"font-size:14px; opacity:0.8;\">Min Temp (°C)</div>\n    <div style=\"font-size:26px; font-weight:bold;\">{{msg.payload.minTemp}}</div>\n  </div>\n</div>",
+        "x": 900,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "dc1e3642ae39493e",
+        "type": "ui_gauge",
+        "z": "609dde192499a49e",
+        "name": "Temperature",
+        "group": "grp_live",
+        "order": 1,
+        "width": 6,
+        "height": 4,
+        "gtype": "gage",
+        "title": "Temperature (°C) – Last Node",
+        "label": "°C",
+        "format": "{{t}}",
+        "min": 0,
+        "max": 60,
+        "colors": [
+            "#00b500",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "",
+        "seg2": "",
+        "x": 880,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "13e4680578cff959",
+        "type": "ui_gauge",
+        "z": "609dde192499a49e",
+        "name": "Humidity",
+        "group": "grp_live",
+        "order": 2,
+        "width": 6,
+        "height": 4,
+        "gtype": "gage",
+        "title": "Humidity (%) – Last Node",
+        "label": "%",
+        "format": "{{h}}",
+        "min": 0,
+        "max": 100,
+        "colors": [
+            "#00b5ff",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "",
+        "seg2": "",
+        "x": 880,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "81a91e85936c056f",
+        "type": "ui_text",
+        "z": "609dde192499a49e",
+        "group": "grp_live",
+        "order": 3,
+        "width": 12,
+        "height": 1,
+        "name": "Alert Text",
+        "label": "Alert (Last Node)",
+        "format": "{{alertText}}",
+        "layout": "col-center",
+        "x": 900,
+        "y": 230,
+        "wires": []
+    },
+    {
+        "id": "0af53194c0bfabee",
+        "type": "ui_template",
+        "z": "609dde192499a49e",
+        "group": "grp_live",
+        "name": "Last Node Card",
+        "order": 4,
+        "width": 12,
+        "height": 3,
+        "format": "<div style=\"background:#000000; color:#ffffff; padding:16px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.6);\">\n  <div style=\"font-size:18px; font-weight:bold; margin-bottom:6px;\">Last Active Node: {{msg.nodeId}}</div>\n  <div>Temperature: {{msg.t}} °C</div>\n  <div>Humidity: {{msg.h}} %</div>\n  <div>Last Seen: {{msg.lastSeen}}</div>\n  <div style=\"margin-top:6px;\">\n    <span>Status: </span>\n    <span style=\"font-weight:bold; color: {{msg.alert == 1 ? '#ff4444' : (msg.alert == 2 ? '#3399ff' : (msg.alert == 3 ? '#ffbb33' : '#44ff44'))}};\">\n      {{msg.alertText}}\n    </span>\n  </div>\n</div>",
+        "x": 930,
+        "y": 280,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "db3205a27fdd60bc",
+        "type": "ui_template",
+        "z": "609dde192499a49e",
+        "group": "grp_nodes",
+        "name": "All Nodes Grid",
+        "order": 1,
+        "width": 12,
+        "height": 6,
+        "format": "<div layout=\"row\" layout-wrap style=\"gap:12px;\">\n  <div ng-repeat=\"n in msg.payload\" style=\"background:#000000; color:#ffffff; padding:12px 14px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.6); min-width:180px; flex:1;\">\n    <div style=\"font-weight:bold; margin-bottom:4px;\">Node {{n.id}}</div>\n    <div>Temp: {{n.t}} °C</div>\n    <div>Hum: {{n.h}} %</div>\n    <div>Last: {{n.lastSeen}}</div>\n    <div style=\"margin-top:4px;\">\n      <span>Status: </span>\n      <span style=\"font-weight:bold; color: {{n.a == 1 ? '#ff4444' : (n.a == 2 ? '#3399ff' : (n.a == 3 ? '#ffbb33' : '#44ff44'))}};\">\n        {{n.a == 0 ? 'Normal' : (n.a == 1 ? 'High Temp' : (n.a == 2 ? 'Low Temp' : 'Sensor Error'))}}\n      </span>\n    </div>\n  </div>\n</div>",
+        "x": 910,
+        "y": 360,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "903d32930486bb82",
+        "type": "ui_chart",
+        "z": "609dde192499a49e",
+        "name": "Temperature Trend",
+        "group": "grp_charts",
+        "order": 1,
+        "width": 12,
+        "height": 4,
+        "label": "Temperature Trend (per node)",
+        "chartType": "line",
+        "legend": "true",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "",
+        "dot": false,
+        "ymin": "0",
+        "ymax": "60",
+        "removeOlder": "30",
+        "removeOlderPoints": "",
+        "removeOlderUnit": "60",
+        "cutout": 0,
+        "useOneColor": false,
+        "colors": [
+            "#ff9900",
+            "#00b5ff",
+            "#ca3838"
+        ],
+        "outputs": 1,
+        "x": 890,
+        "y": 440,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "f43bec9cbe751783",
+        "type": "ui_chart",
+        "z": "609dde192499a49e",
+        "name": "Humidity Trend",
+        "group": "grp_charts",
+        "order": 2,
+        "width": 12,
+        "height": 4,
+        "label": "Humidity Trend (per node)",
+        "chartType": "line",
+        "legend": "true",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "",
+        "dot": false,
+        "ymin": "0",
+        "ymax": "100",
+        "removeOlder": "30",
+        "removeOlderPoints": "",
+        "removeOlderUnit": "60",
+        "cutout": 0,
+        "useOneColor": false,
+        "colors": [
+            "#00b5ff",
+            "#00ff88",
+            "#ff00d0"
+        ],
+        "outputs": 1,
+        "x": 890,
+        "y": 520,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "broker_hmq",
+        "type": "mqtt-broker",
+        "name": "HiveMQ Broker",
+        "broker": "broker.hivemq.com",
+        "port": "1883",
+        "clientid": "",
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true
+    },
+    {
+        "id": "grp_overview",
+        "type": "ui_group",
+        "name": "Overview",
+        "tab": "tab_main",
+        "order": 1,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "grp_live",
+        "type": "ui_group",
+        "name": "Live Readings (Last Node)",
+        "tab": "tab_main",
+        "order": 2,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "grp_nodes",
+        "type": "ui_group",
+        "name": "All Nodes",
+        "tab": "tab_main",
+        "order": 3,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "grp_charts",
+        "type": "ui_group",
+        "name": "Trend Charts",
+        "tab": "tab_main",
+        "order": 4,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "tab_main",
+        "type": "ui_tab",
+        "name": "Thermal Network",
+        "icon": "dashboard",
+        "order": 1
+    },
+    {
+        "id": "a2cf8715778aa866",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-dashboard": "3.6.6"
+        }
+    }
+]
